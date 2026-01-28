@@ -655,7 +655,7 @@ session.file.put('/path/to/file.pdf', '@my_stage', auto_compress=False)
 Install using Cortex Code CLI:
 
 ```bash
-cortex skill add https://github.com/sfc-gh-nejain/coco-ai-func.git
+cortex skill add https://github.com/sfc-gh-nejain/document-intelligence-skill
 ```
 
 Invoke with: `/document-intelligence`
