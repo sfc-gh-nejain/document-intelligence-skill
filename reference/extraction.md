@@ -1,0 +1,888 @@
+# Extraction Sub-Skill
+
+Structured field and table extraction using AI_EXTRACT with test-driven prompt refinement.
+
+## When to Use
+
+This sub-skill is triggered when the user selects:
+- "Specific fields (names, dates, amounts, IDs)"
+- "Tables with defined columns"
+
+## AI_EXTRACT Constraints
+
+**Inform the user before proceeding:**
+
+| Constraint | Limit |
+|------------|-------|
+| Max file size | 100 MB |
+| Max pages | 125 per call |
+| Entity questions | 100 per call (512 tokens each) |
+| Table questions | 10 per call (4096 tokens each) |
+| Image dimensions | 50x50 to 10,000x10,000 pixels |
+
+**Note:** 1 table question = 10 entity questions for quota purposes.
+
+If documents exceed these limits, use chunking strategies (see "Large Document Strategies" section below).
+
+## Workflow
+
+```
+Define Fields → Select Test File → Run Test → Review Results
+                                                    ↓
+                                              Satisfied? ─Yes→ Next Steps
+                                                    │
+                                                   No
+                                                    ↓
+                                              Refine Prompts (max 3x)
+                                                    ↓
+                                              Still failing? → Fallback Method
+```
+
+---
+
+## Step 1: Define Initial Extraction Fields
+
+**Ask** user for the fields they want to extract:
+
+```
+What fields do you want to extract? Please provide field names and descriptions.
+Example: 
+- invoice_number: The invoice or bill number
+- vendor_name: Name of the vendor or supplier
+- total_amount: The total amount due
+```
+
+Build the initial responseFormat:
+```sql
+responseFormat => {
+  'invoice_number': 'What is the invoice number?',
+  'vendor_name': 'What is the vendor name?',
+  'total_amount': 'What is the total amount?'
+}
+```
+
+---
+
+## Step 2: Select Test File
+
+**Ask** user using `ask_user_question`:
+
+```
+How would you like to select the test file?
+Options:
+1. Use the first file in the stage
+2. Let me pick a specific file from the stage
+3. I'll provide the exact file path
+```
+
+**If "first file":**
+```sql
+-- Get first file from stage
+SELECT relative_path 
+FROM DIRECTORY(@db.schema.stage) 
+WHERE relative_path LIKE '%.pdf' 
+LIMIT 1;
+```
+
+**If "pick from stage":**
+```sql
+-- List available files
+SELECT relative_path, size, last_modified
+FROM DIRECTORY(@db.schema.stage)
+WHERE relative_path LIKE '%.pdf'
+ORDER BY last_modified DESC
+LIMIT 10;
+```
+Then ask user to select from the list.
+
+---
+
+## Step 3: Run Test Extraction
+
+Execute AI_EXTRACT on the single test file:
+
+```sql
+-- Test extraction on single file
+SELECT AI_EXTRACT(
+  file => TO_FILE('@db.schema.stage', '<selected_test_file>'),
+  responseFormat => {
+    'field1': 'question1',
+    'field2': 'question2'
+    -- ... user-defined fields
+  }
+) AS test_result;
+```
+
+**Display results to user in a readable format:**
+```sql
+SELECT 
+  test_result:response:field1::STRING AS field1,
+  test_result:response:field2::STRING AS field2
+FROM (SELECT AI_EXTRACT(...) AS test_result);
+```
+
+---
+
+## Step 4: Review Results
+
+**Ask** user using `ask_user_question`:
+
+```
+Here are the test extraction results:
+
+| Field | Extracted Value |
+|-------|-----------------|
+| invoice_number | INV-2024-001 |
+| vendor_name | Acme Corp |
+| total_amount | $1,234.56 |
+
+Are you satisfied with these results?
+Options:
+1. Yes, proceed with full extraction
+2. No, some fields need improvement
+3. No, start over with different fields
+```
+
+**If "Yes":** Proceed to **Step 7: Next Steps**.
+
+**If "Start over":** Return to Step 1.
+
+**If "Some fields need improvement":** Continue to Step 5.
+
+---
+
+## Step 5: Prompt Refinement Loop (LLM-as-Judge)
+
+**Ask** user which field(s) need improvement:
+
+```
+Which field(s) gave incorrect results?
+(Select all that apply)
+```
+
+**For each problematic field, ask:**
+
+```
+For the field "[field_name]":
+- Current extraction: "[actual_result]"
+- What should the correct value be?
+```
+
+**Use Claude as LLM-judge to refine the prompt:**
+
+```sql
+-- LLM-as-judge prompt refinement
+SELECT AI_COMPLETE(
+  'claude-3-5-sonnet',
+  $You are an expert at crafting extraction prompts for document AI.
+
+TASK: Improve an extraction question that didn't produce the expected result.
+
+FIELD: [field_name]
+ORIGINAL QUESTION: "[original_question]"
+EXTRACTED VALUE: "[actual_result]"  
+EXPECTED VALUE: "[expected_result]"
+DOCUMENT TYPE: [document_type from Step 1]
+
+Analyze why the original question may have failed and provide an improved question that would more accurately extract the expected value.
+
+Consider:
+- Is the question too vague or too specific?
+- Should it reference a specific location in the document?
+- Should it specify the format of the expected answer?
+- Are there synonyms or alternative phrasings that might work better?
+
+Return ONLY the improved question, nothing else.$
+) AS improved_question;
+```
+
+**Update the responseFormat with refined question(s)** and retry test extraction.
+
+### Iteration Limits
+
+- Maximum **3 refinement iterations** per field
+- After 3 attempts, **ask** user:
+  ```
+  We've tried 3 prompt variations for "[field_name]" without success.
+  Options:
+  1. Continue anyway with best result so far
+  2. Skip this field for now
+  3. Let me manually specify the extraction question
+  4. Try fallback method (AI_PARSE_DOCUMENT + AI_COMPLETE)
+  ```
+
+**If "Try fallback method":** Proceed to Step 6.
+
+---
+
+## Step 6: Fallback Method (AI_PARSE_DOCUMENT + AI_COMPLETE)
+
+When AI_EXTRACT doesn't produce accurate results even after prompt refinement, use this alternative approach:
+
+1. **Parse the document text** using AI_PARSE_DOCUMENT
+2. **Extract fields** from the parsed text using AI_COMPLETE with structured outputs
+
+This method can be more effective for complex documents where AI_EXTRACT struggles.
+
+### Step 6a: Parse document to get text content
+
+```sql
+-- Parse document using OCR or LAYOUT mode
+SELECT AI_PARSE_DOCUMENT(
+  TO_FILE('@db.schema.stage', '<test_file>'),
+  {'mode': 'LAYOUT'}
+):content::STRING AS document_text;
+```
+
+### Step 6b: Build JSON schema for structured output
+
+Convert the user's fields into a JSON schema:
+
+```sql
+-- Example: For fields invoice_number, vendor_name, total_amount
+-- Build this schema:
+{
+  'type': 'json',
+  'schema': {
+    'type': 'object',
+    'properties': {
+      'invoice_number': {
+        'type': 'string',
+        'description': 'The invoice or bill number'
+      },
+      'vendor_name': {
+        'type': 'string', 
+        'description': 'Name of the vendor or supplier'
+      },
+      'total_amount': {
+        'type': 'string',
+        'description': 'The total amount due'
+      }
+    },
+    'required': ['invoice_number', 'vendor_name', 'total_amount']
+  }
+}
+```
+
+### Step 6c: Extract using AI_COMPLETE with structured outputs
+
+```sql
+-- Complete extraction with structured output
+WITH parsed_doc AS (
+  SELECT AI_PARSE_DOCUMENT(
+    TO_FILE('@db.schema.stage', '<test_file>'),
+    {'mode': 'LAYOUT'}
+  ):content::STRING AS document_text
+)
+SELECT AI_COMPLETE(
+  'claude-3-5-sonnet',
+  'Extract the following information from this document text. Return ONLY the requested fields in JSON format.
+
+DOCUMENT TEXT:
+' || document_text || '
+
+Extract these fields:
+- invoice_number: The invoice or bill number
+- vendor_name: Name of the vendor or supplier  
+- total_amount: The total amount due',
+  {
+    'response_format': {
+      'type': 'json',
+      'schema': {
+        'type': 'object',
+        'properties': {
+          'invoice_number': {'type': 'string', 'description': 'The invoice or bill number'},
+          'vendor_name': {'type': 'string', 'description': 'Name of the vendor or supplier'},
+          'total_amount': {'type': 'string', 'description': 'The total amount due'}
+        },
+        'required': ['invoice_number', 'vendor_name', 'total_amount']
+      }
+    },
+    'max_tokens': 4096
+  }
+) AS extraction_result
+FROM parsed_doc;
+```
+
+### Step 6d: Compare results with AI_EXTRACT
+
+Display both results to user:
+
+```
+Fallback extraction results:
+
+| Field | AI_EXTRACT Result | AI_COMPLETE Result |
+|-------|-------------------|-------------------|
+| invoice_number | INV-2024-001 | INV-2024-001 |
+| vendor_name | Acme | Acme Corporation |
+| total_amount | 1234 | $1,234.56 |
+
+Which result is more accurate?
+Options:
+1. AI_COMPLETE results are better - use fallback method
+2. AI_EXTRACT results are better - stick with original
+3. Neither is correct - try manual specification
+```
+
+### Step 6e: Batch processing with fallback method
+
+```sql
+-- Batch extraction using AI_PARSE_DOCUMENT + AI_COMPLETE
+SELECT 
+  relative_path AS file_path,
+  PARSE_JSON(AI_COMPLETE(
+    'claude-3-5-sonnet',
+    'Extract the following information from this document text. Return ONLY the requested fields.
+
+DOCUMENT TEXT:
+' || AI_PARSE_DOCUMENT(
+      TO_FILE('@db.schema.stage', relative_path),
+      {'mode': 'LAYOUT'}
+    ):content::STRING || '
+
+Extract: invoice_number, vendor_name, total_amount',
+    {
+      'response_format': {
+        'type': 'json',
+        'schema': {
+          'type': 'object',
+          'properties': {
+            'invoice_number': {'type': 'string'},
+            'vendor_name': {'type': 'string'},
+            'total_amount': {'type': 'string'}
+          },
+          'required': ['invoice_number', 'vendor_name', 'total_amount']
+        }
+      },
+      'max_tokens': 4096
+    }
+  )) AS extracted_data
+FROM DIRECTORY(@db.schema.stage)
+WHERE relative_path LIKE '%.pdf';
+```
+
+### Structured Output Schema Examples
+
+For different data types:
+
+```sql
+-- String fields
+'field_name': {'type': 'string', 'description': 'Description of field'}
+
+-- Number fields  
+'amount': {'type': 'number', 'description': 'Numeric amount'}
+
+-- Integer fields
+'quantity': {'type': 'integer', 'description': 'Whole number quantity'}
+
+-- Boolean fields
+'is_paid': {'type': 'boolean', 'description': 'Whether invoice is paid'}
+
+-- Enum fields (constrained values)
+'status': {
+  'type': 'string',
+  'enum': ['pending', 'approved', 'rejected'],
+  'description': 'Document status'
+}
+
+-- Array fields
+'line_items': {
+  'type': 'array',
+  'items': {
+    'type': 'object',
+    'properties': {
+      'description': {'type': 'string'},
+      'quantity': {'type': 'integer'},
+      'unit_price': {'type': 'number'},
+      'total': {'type': 'number'}
+    },
+    'required': ['description', 'quantity', 'unit_price', 'total']
+  },
+  'description': 'List of line items'
+}
+
+-- Nested objects
+'address': {
+  'type': 'object',
+  'properties': {
+    'street': {'type': 'string'},
+    'city': {'type': 'string'},
+    'state': {'type': 'string'},
+    'zip': {'type': 'string'}
+  },
+  'required': ['street', 'city', 'state', 'zip'],
+  'description': 'Mailing address'
+}
+```
+
+### When to prefer the fallback method
+
+| Scenario | Recommendation |
+|----------|----------------|
+| Complex nested data (addresses, line items) | Use fallback - better at structured objects |
+| Documents with unusual layouts | Use fallback - LAYOUT mode captures more context |
+| Need specific data types (numbers, booleans) | Use fallback - schema enforces types |
+| Simple flat fields | Stick with AI_EXTRACT - faster and simpler |
+| High volume batch processing | Test both, compare accuracy and cost |
+
+---
+
+## Step 7: Next Steps After Validation
+
+Once user is satisfied with test results, **ask** what they want to do next:
+
+```
+Test extraction validated successfully! What would you like to do next?
+Options:
+1. Extract from all files in the stage (batch processing)
+2. Add more fields to extract
+3. Store this single result to a table
+4. Try on another test file first
+5. Done - I only needed this one file
+```
+
+**Route based on response:**
+
+| User Selection | Action |
+|----------------|--------|
+| Extract from all files | Proceed to batch extraction |
+| Add more fields | Return to Step 1 with existing fields preserved |
+| Store this result | Generate INSERT statement for single result |
+| Try another test file | Return to Step 2 with same responseFormat |
+| Done | End workflow, display final results |
+
+**If "Add more fields":**
+```
+You currently have these fields defined:
+- invoice_number
+- vendor_name  
+- total_amount
+
+What additional fields would you like to extract?
+```
+
+---
+
+## Large Document Strategies (>125 pages)
+
+### Check for Large Files First
+
+**Ask** user:
+```
+Can any of your files be longer than the page limit?
+- AI_EXTRACT: 125 pages max
+- AI_PARSE_DOCUMENT: 500 pages max
+Options:
+1. No - all files are within the limit
+2. Yes - some files may exceed the limit
+3. Not sure
+```
+
+### Page Optimization (to reduce cost and improve speed)
+
+**Ask** user:
+```
+Would you like to process the entire document or only specific pages?
+This can significantly reduce processing time and cost.
+
+Options:
+1. Process entire document (all pages)
+2. Process only the first page (common for invoices/forms with header info)
+3. Process specific page range (e.g., pages 1-5)
+4. Process specific pages (e.g., pages 1, 3, 10)
+```
+
+### Page Extraction Stored Procedure
+
+```sql
+-- Create stage for extracted pages (with server-side encryption)
+CREATE STAGE IF NOT EXISTS db.schema.extracted_pages_stage
+  DIRECTORY = (ENABLE = TRUE)
+  ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE')
+  COMMENT = 'Stage for extracted PDF pages';
+
+-- Create page extraction stored procedure
+CREATE OR REPLACE PROCEDURE db.schema.extract_pdf_pages(
+    stage_name STRING, 
+    file_name STRING, 
+    dest_stage_name STRING,
+    page_selection VARIANT  -- Can be: integer (single page), array of integers, or object with 'start' and 'end'
+)
+RETURNS VARIANT
+LANGUAGE PYTHON
+RUNTIME_VERSION = '3.9'
+PACKAGES = ('snowflake-snowpark-python', 'pypdf2')
+HANDLER = 'run'
+AS
+$
+from PyPDF2 import PdfReader, PdfWriter
+from snowflake.snowpark import Session
+from snowflake.snowpark.file_operation import FileOperation
+from io import BytesIO
+import os
+import json
+
+def run(session: Session, stage_name: str, file_name: str, dest_stage_name: str, page_selection) -> dict:
+    result = {
+        "status": "success",
+        "source_file": file_name,
+        "total_pages": 0,
+        "extracted_pages": [],
+        "output_file": ""
+    }
+    
+    try:
+        # Download PDF from stage
+        file_url = f"{stage_name}/{file_name}"
+        get_result = session.file.get(file_url, '/tmp/')
+        file_path = os.path.join('/tmp/', file_name)
+        
+        if not os.path.exists(file_path):
+            return {"status": "error", "message": f"File {file_name} not found in {stage_name}"}
+
+        with open(file_path, 'rb') as f:
+            pdf_data = f.read()
+            pdf_reader = PdfReader(BytesIO(pdf_data))
+            num_pages = len(pdf_reader.pages)
+            result["total_pages"] = num_pages
+            
+            # Determine which pages to extract (convert to 0-indexed)
+            pages_to_extract = []
+            
+            if isinstance(page_selection, int):
+                # Single page (1-indexed input)
+                pages_to_extract = [page_selection - 1]
+            elif isinstance(page_selection, list):
+                # List of specific pages (1-indexed input)
+                pages_to_extract = [p - 1 for p in page_selection]
+            elif isinstance(page_selection, dict):
+                # Range with 'start' and 'end' (1-indexed input)
+                start = page_selection.get('start', 1) - 1
+                end = min(page_selection.get('end', num_pages), num_pages)
+                pages_to_extract = list(range(start, end))
+            
+            # Validate pages
+            pages_to_extract = [p for p in pages_to_extract if 0 <= p < num_pages]
+            
+            if not pages_to_extract:
+                return {"status": "error", "message": "No valid pages to extract"}
+            
+            # Create new PDF with selected pages
+            writer = PdfWriter()
+            for page_num in pages_to_extract:
+                writer.add_page(pdf_reader.pages[page_num])
+                result["extracted_pages"].append(page_num + 1)  # Return 1-indexed
+            
+            # Generate output filename
+            base_name = os.path.splitext(file_name)[0]
+            if len(pages_to_extract) == 1:
+                output_filename = f'{base_name}_page_{pages_to_extract[0] + 1}.pdf'
+            else:
+                output_filename = f'{base_name}_pages_{pages_to_extract[0] + 1}_to_{pages_to_extract[-1] + 1}.pdf'
+            
+            output_path = os.path.join('/tmp/', output_filename)
+            
+            with open(output_path, 'wb') as output_file:
+                writer.write(output_file)
+            
+            # Upload to destination stage
+            FileOperation(session).put(
+                f"file://{output_path}",
+                dest_stage_name,
+                auto_compress=False
+            )
+            
+            result["output_file"] = output_filename
+            
+            # Cleanup
+            os.remove(file_path)
+            os.remove(output_path)
+                
+        return result
+        
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+$;
+```
+
+### Extract pages based on user selection
+
+```sql
+-- Option 2: First page only
+CALL db.schema.extract_pdf_pages(
+  '@db.schema.my_stage',
+  'invoice.pdf',
+  '@db.schema.extracted_pages_stage',
+  1  -- Single page (1-indexed)
+);
+
+-- Option 3: Page range (e.g., pages 1-5)
+CALL db.schema.extract_pdf_pages(
+  '@db.schema.my_stage',
+  'invoice.pdf',
+  '@db.schema.extracted_pages_stage',
+  {'start': 1, 'end': 5}  -- Range (1-indexed, inclusive)
+);
+
+-- Option 4: Specific pages (e.g., pages 1, 3, 10)
+CALL db.schema.extract_pdf_pages(
+  '@db.schema.my_stage',
+  'invoice.pdf',
+  '@db.schema.extracted_pages_stage',
+  [1, 3, 10]  -- Array of pages (1-indexed)
+);
+```
+
+### Then run AI_EXTRACT on extracted pages
+
+```sql
+-- Extract from the optimized PDF (fewer pages = faster + cheaper)
+SELECT AI_EXTRACT(
+  file => TO_FILE('@db.schema.extracted_pages_stage', '<output_file_from_procedure>'),
+  responseFormat => {
+    'invoice_number': 'What is the invoice number?',
+    'vendor_name': 'What is the vendor name?',
+    'total_amount': 'What is the total amount?'
+  }
+) AS result;
+```
+
+---
+
+## Pipeline Options
+
+### Pipeline Option A: Standard Pipeline (Files within page limits)
+
+```sql
+-- Step 1: Create results table
+CREATE TABLE IF NOT EXISTS db.schema.extraction_results (
+  file_path STRING,
+  file_name STRING,
+  extracted_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+  invoice_number STRING,
+  vendor_name STRING,
+  total_amount STRING,
+  raw_response VARIANT
+);
+
+-- Step 2: Create stream on stage
+CREATE OR REPLACE STREAM db.schema.doc_stream ON STAGE @db.schema.my_stage;
+
+-- Step 3: Create processing task
+CREATE OR REPLACE TASK db.schema.extract_documents_task
+  WAREHOUSE = my_warehouse
+  SCHEDULE = '5 MINUTE'
+  WHEN SYSTEM$STREAM_HAS_DATA('db.schema.doc_stream')
+AS
+  INSERT INTO db.schema.extraction_results (file_path, file_name, invoice_number, vendor_name, total_amount, raw_response)
+  SELECT 
+    relative_path,
+    SPLIT_PART(relative_path, '/', -1),
+    result:response:invoice_number::STRING,
+    result:response:vendor_name::STRING,
+    result:response:total_amount::STRING,
+    result
+  FROM db.schema.doc_stream,
+  LATERAL (
+    SELECT AI_EXTRACT(
+      file => TO_FILE('@db.schema.my_stage', relative_path),
+      responseFormat => {
+        'invoice_number': 'What is the invoice number?',
+        'vendor_name': 'What is the vendor name?',
+        'total_amount': 'What is the total amount?'
+      }
+    ) AS result
+  )
+  WHERE METADATA$ACTION = 'INSERT'
+    AND relative_path LIKE '%.pdf';
+
+ALTER TASK db.schema.extract_documents_task RESUME;
+```
+
+### Pipeline Option B: Chunking Pipeline (For documents >125 pages)
+
+Use this when documents may exceed 125 pages and need to be split into chunks.
+
+```sql
+-- Create chunking stored procedure
+CREATE OR REPLACE PROCEDURE db.schema.split_document_into_chunks(
+    stage_name STRING, 
+    file_name STRING, 
+    dest_stage_name STRING,
+    chunk_size INT DEFAULT 125
+)
+RETURNS VARIANT
+LANGUAGE PYTHON
+RUNTIME_VERSION = '3.9'
+PACKAGES = ('snowflake-snowpark-python', 'pypdf2')
+HANDLER = 'run'
+AS
+$
+from PyPDF2 import PdfReader, PdfWriter
+from snowflake.snowpark import Session
+from snowflake.snowpark.file_operation import FileOperation
+from io import BytesIO
+import os
+import math
+
+def run(session: Session, stage_name: str, file_name: str, dest_stage_name: str, chunk_size: int = 125) -> dict:
+    result = {
+        "status": "success",
+        "source_file": file_name,
+        "total_pages": 0,
+        "chunks_created": 0,
+        "chunk_files": []
+    }
+    
+    try:
+        file_url = f"{stage_name}/{file_name}"
+        get_result = session.file.get(file_url, '/tmp/')
+        file_path = os.path.join('/tmp/', file_name)
+        
+        if not os.path.exists(file_path):
+            return {"status": "error", "message": f"File {file_name} not found"}
+
+        with open(file_path, 'rb') as f:
+            pdf_data = f.read()
+            pdf_reader = PdfReader(BytesIO(pdf_data))
+            num_pages = len(pdf_reader.pages)
+            result["total_pages"] = num_pages
+            
+            num_chunks = math.ceil(num_pages / chunk_size)
+            result["chunks_created"] = num_chunks
+            
+            base_name = os.path.splitext(file_name)[0]
+            
+            for chunk_num in range(num_chunks):
+                start_page = chunk_num * chunk_size
+                end_page = min((chunk_num + 1) * chunk_size, num_pages)
+                
+                writer = PdfWriter()
+                for page_num in range(start_page, end_page):
+                    writer.add_page(pdf_reader.pages[page_num])
+                
+                chunk_filename = f'{base_name}_chunk_{chunk_num + 1}_pages_{start_page + 1}_{end_page}.pdf'
+                chunk_file_path = os.path.join('/tmp/', chunk_filename)
+                
+                with open(chunk_file_path, 'wb') as output_file:
+                    writer.write(output_file)
+
+                FileOperation(session).put(
+                    f"file://{chunk_file_path}",
+                    dest_stage_name,
+                    auto_compress=False
+                )
+                
+                result["chunk_files"].append({
+                    "chunk_number": chunk_num + 1,
+                    "filename": chunk_filename,
+                    "start_page": start_page + 1,
+                    "end_page": end_page,
+                    "page_count": end_page - start_page
+                })
+                
+                os.remove(chunk_file_path)
+            
+            os.remove(file_path)
+                
+        return result
+        
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+$;
+```
+
+### Pipeline Option C: Full Document Pipeline (AI_PARSE_DOCUMENT + AI_COMPLETE)
+
+Use this when documents must be processed as a whole and context from the entire document is important. Supports documents up to 500 pages.
+
+**When to use this approach:**
+- **Contracts** - Terms reference other sections
+- **Legal documents** - Clauses depend on definitions elsewhere
+- **Research papers** - Methodology affects interpretation of results
+- **Technical manuals** - Procedures reference diagrams in other sections
+- **Policy documents** - Exceptions and conditions span multiple pages
+
+```sql
+-- Full-document extraction
+WITH parsed_doc AS (
+  SELECT 
+    AI_PARSE_DOCUMENT(
+      TO_FILE('@db.schema.my_stage', 'contract.pdf'),
+      {'mode': 'LAYOUT'}
+    ) AS parsed_result
+),
+document_text AS (
+  SELECT 
+    parsed_result:content::STRING AS full_text,
+    parsed_result:pageCount::INT AS total_pages
+  FROM parsed_doc
+)
+SELECT 
+  total_pages,
+  AI_COMPLETE(
+    'claude-3-5-sonnet',
+    'You are an expert contract analyst. Extract contract information from this document.
+    
+DOCUMENT CONTENT:
+' || full_text || '
+
+Extract all requested fields. If information is not found, use null.',
+    {
+      'response_format': {
+        'type': 'json',
+        'schema': {
+          'type': 'object',
+          'properties': {
+            'contract_parties': {
+              'type': 'object',
+              'properties': {
+                'party_a': {'type': 'string'},
+                'party_b': {'type': 'string'}
+              },
+              'required': ['party_a', 'party_b']
+            },
+            'effective_date': {'type': 'string'},
+            'termination_date': {'type': 'string'},
+            'total_value': {'type': 'string'}
+          },
+          'required': ['contract_parties', 'effective_date', 'total_value']
+        }
+      },
+      'max_tokens': 8192
+    }
+  ) AS extraction_result
+FROM document_text;
+```
+
+### Comparison: Chunking vs Full-Document Approach
+
+| Aspect | Chunking (Option B) | Full Document (Option C) |
+|--------|---------------------|--------------------------|
+| Max pages | Unlimited (125-page chunks) | 500 pages |
+| Context preservation | Limited (per chunk) | Full document context |
+| Cross-references | May miss | Preserved |
+| Best for | Independent pages (invoices) | Interconnected content (contracts) |
+| Result aggregation | Required | Not needed |
+| Processing complexity | Higher (multiple stages) | Simpler (single pass) |
+| Use AI_EXTRACT | Yes (per chunk) | No (AI_COMPLETE instead) |
+
+---
+
+## Handoff to Batch Extraction
+
+**Example handoff context:**
+```
+Proceeding to full extraction with validated schema:
+
+Stage: @db.schema.stage
+File pattern: %.pdf
+Validated responseFormat:
+{
+  'invoice_number': 'What is the invoice or bill number shown at the top of the document?',
+  'vendor_name': 'What is the name of the company or vendor issuing this invoice?',
+  'total_amount': 'What is the final total amount due, including taxes?'
+}
+
+Test results confirmed accurate on: sample_invoice.pdf
+```
