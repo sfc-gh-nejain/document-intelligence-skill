@@ -35,32 +35,46 @@ Options:
 
 ### Pre-Check: File Size and Page Optimization (AI_EXTRACT Only)
 
-**If the user used AI_EXTRACT (Flow A), ALWAYS ask these questions first:**
+**If the user used AI_EXTRACT (Flow A), ALWAYS ask BOTH questions before proceeding:**
 
+---
+
+#### Question 1: File Size Check (REQUIRED)
+
+**Ask:**
 ```
-Before setting up your pipeline, I need to understand your document characteristics:
+Do any of your files exceed 125 pages?
 
-1. Document Size:
-   - Do any of your files exceed 125 pages?
-   - AI_EXTRACT has a limit of 125 pages per call
-   
-   Options:
-   a. No - all files are within 125 pages
-   b. Yes - some files may exceed 125 pages (needs chunking)
-   c. Not sure - let me check
+AI_EXTRACT has a limit of 125 pages per call. Files exceeding this limit 
+need to be split into chunks before processing.
 
-2. Page Optimization:
-   - Do you need to extract from the entire document, or just specific pages?
-   - Extracting fewer pages = faster processing and lower cost
-   
-   Options:
-   a. Extract from entire document (all pages)
-   b. Extract from first page only (common for invoices/forms with header info)
-   c. Extract from specific page range (e.g., pages 1-5)
-   d. Extract from specific pages (e.g., pages 1, 3, 10)
+Options:
+a. No - all files are within 125 pages
+b. Yes - some files may exceed 125 pages (needs chunking)
+c. Not sure - I need to check my files
 ```
 
-**Route based on response:**
+---
+
+#### Question 2: Page Optimization (REQUIRED)
+
+**Ask:**
+```
+Do you want to optimize extraction by processing only specific pages?
+
+Extracting fewer pages = faster processing and lower cost.
+This is useful when the data you need is on specific pages (e.g., first page of invoices).
+
+Options:
+a. No - extract from entire document (all pages)
+b. Yes - extract from first page only (common for invoices/forms)
+c. Yes - extract from a specific page range (e.g., pages 1-5)
+d. Yes - extract from specific pages (e.g., pages 1, 3, 10)
+```
+
+---
+
+**Route based on BOTH responses:**
 
 | File Size | Page Optimization | Recommended Template |
 |-----------|-------------------|---------------------|
