@@ -26,13 +26,41 @@ The skill is triggered by mentions of:
 ## Directory Structure
 
 ```
-skills/
-└── document-intelligence/
-    ├── SKILL.md                    # Main skill (entry point)
-    └── reference/
-        ├── ai-extract.md           # AI_EXTRACT patterns & templates
-        └── ai-parse-doc.md         # AI_PARSE_DOCUMENT patterns & templates
+document-intelligence/
+├── SKILL.md                                    # Main skill (entry point)
+├── README.md                                   # This file
+└── reference/
+    ├── ai-extract.md                           # AI_EXTRACT function reference
+    ├── ai-parse-doc-and-ai-complete.md         # AI_PARSE_DOCUMENT & AI_COMPLETE reference
+    ├── extraction.md                           # Flow A: Structured field/table extraction
+    ├── parsing.md                              # Flow B: Full content parsing
+    ├── visual-analysis.md                      # Flow C: Charts, blueprints, diagrams
+    └── pipeline.md                             # Post-processing: pipelines, storage, RAG
 ```
+
+## Sub-Skills
+
+| Sub-Skill | File | Purpose |
+|-----------|------|---------|
+| **Extraction** | `reference/extraction.md` | Flow A: AI_EXTRACT for structured fields/tables |
+| **Parsing** | `reference/parsing.md` | Flow B: AI_PARSE_DOCUMENT for full text with layout |
+| **Visual Analysis** | `reference/visual-analysis.md` | Flow C: AI_COMPLETE for charts, blueprints, diagrams |
+| **Pipeline** | `reference/pipeline.md` | Post-processing: storage, pipelines, RAG integration |
+
+### Flow Selection
+
+The skill automatically re-evaluates which flow is best for each request:
+
+| User Wants | Best Flow | Function |
+|------------|-----------|----------|
+| Named fields (invoice_number, date, vendor) | **Flow A: Extraction** | AI_EXTRACT |
+| Table data with known columns | **Flow A: Extraction** | AI_EXTRACT |
+| Full document text with structure | **Flow B: Parsing** | AI_PARSE_DOCUMENT |
+| OCR from scanned documents | **Flow B: Parsing** | AI_PARSE_DOCUMENT |
+| Chart/graph interpretation | **Flow C: Visual Analysis** | AI_COMPLETE |
+| Blueprint/diagram analysis | **Flow C: Visual Analysis** | AI_COMPLETE |
+
+**Important:** The skill re-evaluates the best flow for every follow-up question or new extraction request. It does not assume the same flow applies.
 
 ## Cortex AI Functions
 
