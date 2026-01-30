@@ -24,7 +24,7 @@ This skill uses reference documentation for detailed function guidance:
 | Reference | Location | Use For |
 |-----------|----------|---------|
 | AI_EXTRACT | `reference/ai-extract.md` | Function reference for structured extraction |
-| AI_PARSE_DOCUMENT | `reference/ai-parse-doc.md` | Function reference for content parsing |
+| AI_PARSE_DOCUMENT & AI_COMPLETE | `reference/ai-parse-doc-and-ai-complete.md` | Function reference for content parsing |
 | **Extraction** | `reference/extraction.md` | Flow A: Structured field/table extraction workflow |
 | **Parsing** | `reference/parsing.md` | Flow B: Full content parsing workflow |
 | **Visual Analysis** | `reference/visual-analysis.md` | Flow C: Charts, blueprints, diagrams analysis |
