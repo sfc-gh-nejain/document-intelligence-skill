@@ -31,10 +31,60 @@ Options:
 
 ---
 
-## If Image File: Proceed Directly to Analysis
+## Step 2: Gather User Questions
+
+**Ask** user what information they want to extract:
+
+```
+What would you like to extract or analyze from this visual content?
+
+You can provide multiple questions or data points. Examples:
+- "Extract all data points from the chart"
+- "What are the axis labels and values?"
+- "Identify the trend and any anomalies"
+- "List all components shown in the blueprint"
+- "What are the dimensions and scale?"
+
+Please describe what information you need:
+```
+
+**Capture user's response** and use it to build the analysis prompt.
+
+**Common question patterns by content type:**
+
+| Content Type | Typical Questions |
+|--------------|-------------------|
+| **Charts/Graphs** | Data points, axis labels, trends, legend values, chart type, comparisons |
+| **Blueprints** | Components, dimensions, scale, materials, annotations, room labels |
+| **Flowcharts** | Process steps, decision points, connections, start/end points |
+| **Diagrams** | Parts identification, relationships, labels, hierarchy |
+| **Screenshots** | UI elements, text content, error messages, form values |
+
+**If user provides multiple questions**, combine them into a structured prompt:
+
+```
+User questions:
+1. What are the data points?
+2. What is the trend?
+3. Are there any anomalies?
+
+→ Build prompt: "Analyze this chart and answer the following:
+   1. Extract all data points with their exact values
+   2. Describe the overall trend shown
+   3. Identify any anomalies or outliers in the data"
+```
+
+---
+
+## Step 3: Proceed Based on File Format
+
+### If Image File: Proceed Directly to Analysis
+
+Use the user's questions to build the analysis prompt:
 
 ```sql
 -- Direct visual analysis with AI_COMPLETE
+-- Replace <USER_QUESTIONS> with the questions gathered in Step 2
 SELECT AI_COMPLETE(
   'claude-3-5-sonnet',
   [
@@ -42,7 +92,30 @@ SELECT AI_COMPLETE(
       'role': 'user',
       'content': [
         {'type': 'image', 'image_url': {'url': TO_FILE('@db.schema.stage', 'chart.png')}},
-        {'type': 'text', 'text': 'Analyze this chart/diagram. Describe what you see and extract key information.'}
+        {'type': 'text', 'text': 'Analyze this image and answer the following questions:\n\n<USER_QUESTIONS>\n\nProvide detailed answers for each question.'}
+      ]
+    }
+  ],
+  {'max_tokens': 4096}
+) AS analysis;
+```
+
+**Example with user questions:**
+```sql
+-- User asked: "What are the data points? What is the trend?"
+SELECT AI_COMPLETE(
+  'claude-3-5-sonnet',
+  [
+    {
+      'role': 'user',
+      'content': [
+        {'type': 'image', 'image_url': {'url': TO_FILE('@db.schema.stage', 'sales_chart.png')}},
+        {'type': 'text', 'text': 'Analyze this chart and answer the following questions:
+
+1. What are all the data points shown? List each with its exact value.
+2. What is the overall trend? Is it increasing, decreasing, or stable?
+
+Provide detailed answers for each question.'}
       ]
     }
   ],
@@ -52,9 +125,9 @@ SELECT AI_COMPLETE(
 
 ---
 
-## If PDF File: Convert to Image First
+### If PDF File: Convert to Image First
 
-### Step 1: Create the PDF-to-Image conversion stored procedure
+#### Create the PDF-to-Image conversion stored procedure (one-time setup)
 
 This procedure converts PDF pages to images using pdf2image and uploads them to an images stage:
 
@@ -173,7 +246,7 @@ def run(session: Session, stage_name: str, file_name: str, dest_stage_name: str,
 $;
 ```
 
-### Step 2: Ask which pages to convert
+#### Ask which pages to convert
 
 ```
 Which pages of the PDF contain the charts/diagrams you want to analyze?
@@ -184,7 +257,7 @@ Options:
 4. Convert just the first page to test
 ```
 
-### Step 3: Convert PDF to images
+#### Convert PDF to images
 
 ```sql
 -- Convert specific pages (e.g., pages 1, 3, 5)
@@ -208,7 +281,7 @@ CALL db.schema.convert_pdf_to_images(
 );
 ```
 
-### Step 4: Verify converted images
+#### Verify converted images
 
 ```sql
 -- Refresh stage directory
@@ -220,10 +293,13 @@ WHERE relative_path LIKE 'blueprint_%'
 ORDER BY relative_path;
 ```
 
-### Step 5: Analyze images with AI_COMPLETE
+#### Analyze images with AI_COMPLETE
+
+Use the user's questions from Step 2:
 
 ```sql
--- Analyze a single converted image
+-- Analyze a single converted image with user's questions
+-- Replace <USER_QUESTIONS> with questions gathered in Step 2
 SELECT AI_COMPLETE(
   'claude-3-5-sonnet',
   [
@@ -231,7 +307,7 @@ SELECT AI_COMPLETE(
       'role': 'user',
       'content': [
         {'type': 'image', 'image_url': {'url': TO_FILE('@db.schema.images_stage', 'blueprint_page_1.png')}},
-        {'type': 'text', 'text': 'Analyze this blueprint/diagram. Identify all components, measurements, and annotations.'}
+        {'type': 'text', 'text': 'Analyze this image and answer the following questions:\n\n<USER_QUESTIONS>\n\nProvide detailed answers for each question.'}
       ]
     }
   ],
@@ -241,23 +317,9 @@ SELECT AI_COMPLETE(
 
 ---
 
-## Step 2: Visual Analysis Prompts
+## Prompt Templates by Content Type
 
-**Ask** user what they want to analyze:
-
-```
-What would you like to analyze in the image?
-Options:
-1. Charts/graphs - extract data points, trends, labels
-2. Blueprints/technical drawings - identify components, measurements
-3. Diagrams/flowcharts - describe structure, relationships
-4. General visual content - describe what you see
-5. Custom analysis - I'll describe what I need
-```
-
----
-
-## Prompt Templates by Type
+Use these templates as a starting point, then customize based on user's specific questions from Step 2.
 
 ### Charts/Graphs
 
