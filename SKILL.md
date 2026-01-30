@@ -50,247 +50,178 @@ This skill uses reference documentation for detailed function guidance:
 ```
 Start
   ↓
-Step 1: Gather Document Info
+Step 1: Determine Extraction Goal (FIRST)
   ↓
-  ├─→ Local file → PUT to Snowflake stage
-  │
-  ├─→ Other storage (GDrive, Dropbox, etc.) → Load openflow skill
-  │                                              ↓
-  │                                           Setup connector
-  │                                              ↓
-  │                                           Return here
+  Analyze user request → May trigger multiple flows
   ↓
-Step 2: Determine Extraction Goal
+  ├─→ Structured fields/tables → Flow A (AI_EXTRACT)
+  ├─→ Full text with layout/OCR → Flow B (AI_PARSE_DOCUMENT)
+  ├─→ Charts/diagrams/blueprints → Flow C (AI_COMPLETE)
+  └─→ Multiple needs → Multiple flows in sequence
   ↓
-  ├─→ Structured fields/tables → Load reference/extraction.md (Flow A)
-  │
-  ├─→ Full text with layout → Load reference/parsing.md (Flow B - LAYOUT)
-  │
-  ├─→ Text via OCR → Load reference/parsing.md (Flow B - OCR)
-  │
-  └─→ Images/charts/blueprints → Load reference/visual-analysis.md (Flow C)
+Step 2: Get File Location
   ↓
-Step 3: Post-Processing Options
+  ├─→ Snowflake stage → Proceed to extraction
+  ├─→ Local file → Help upload via PUT command
+  └─→ Other storage → Load openflow skill for connector
   ↓
-  ├─→ Store results → Create table / Create pipeline
+Step 3: Infer File Type & Validate
+  ↓
+  Extract extension from file path → Check compatibility
+  ↓
+Step 4: Execute Flow(s)
+  ↓
+Step 5: Post-Processing Options
+  ↓
+  └─→ Load reference/pipeline.md
 ```
 
-### Step 1: Gather Document Information
+### Step 1: Determine Extraction Goal (ASK FIRST)
 
-**Ask** user about their document using `ask_user_question`:
+**Ask** user what they want to extract. Allow free-form response:
 
-**Question 1 - File Format:**
 ```
-What type of file do you want to process?
+What would you like to extract or analyze from your document?
+
+You can describe in your own words. Examples:
+- "Extract invoice number, vendor name, and total amount"
+- "Get all the text content with formatting preserved"
+- "Analyze the charts and extract data points"
+- "Pull out the table of line items"
+- "Get a summary of the document"
+- "Extract specific fields AND get the full text"
+
+What do you need?
+```
+
+### Analyzing the Request
+
+**Carefully analyze** the user's response to determine which flow(s) to trigger:
+
+| User Mentions | Flow to Trigger | Function |
+|---------------|-----------------|----------|
+| Specific fields (names, dates, amounts, IDs) | **Flow A** | AI_EXTRACT |
+| Tables with columns | **Flow A** | AI_EXTRACT |
+| Full text, all content, complete document | **Flow B** | AI_PARSE_DOCUMENT |
+| Layout, formatting, structure preserved | **Flow B** | AI_PARSE_DOCUMENT |
+| OCR, scanned document, text recognition | **Flow B** | AI_PARSE_DOCUMENT |
+| Charts, graphs, plots, trends | **Flow C** | AI_COMPLETE |
+| Diagrams, blueprints, schematics | **Flow C** | AI_COMPLETE |
+| Visual analysis, what's in the image | **Flow C** | AI_COMPLETE |
+
+### Multiple Flows Detection
+
+**Check if multiple flows are needed:**
+
+| User Request Pattern | Flows Needed |
+|---------------------|--------------|
+| "Extract fields AND get full text" | Flow A + Flow B |
+| "Get invoice data AND analyze the chart" | Flow A + Flow C |
+| "Parse the document AND extract the diagram" | Flow B + Flow C |
+| "Extract everything - fields, text, and charts" | Flow A + Flow B + Flow C |
+
+**If multiple flows detected:**
+```
+I notice you need multiple types of extraction:
+- [List detected needs]
+
+I'll process these in sequence:
+1. [First flow]
+2. [Second flow]
+...
+
+Let's start with [first flow]. After that completes, I'll proceed to the next.
+```
+
+### Step 2: Get File Location
+
+**Ask** user where their file is stored:
+
+```
+Where is your file located?
 Options:
-1. PDF
-2. Image (PNG, JPEG, TIFF)
-3. Office document (DOCX, PPTX)
-4. HTML or TXT file
-5. CSV file - AI_EXTRACT only
-6. MD or EML file - AI_EXTRACT only
-7. Excel file (XLSX, XLS) - not supported
-8. Legacy Office (DOC, PPT) - needs conversion
+1. Snowflake stage (e.g., @my_db.my_schema.my_stage/file.pdf)
+2. Local file on my computer
+3. External stage (S3, Azure Blob, GCS)
+4. Cloud storage (Google Drive, Dropbox, SharePoint, OneDrive, Box)
 ```
 
-**Supported Formats Summary:**
-- **AI_EXTRACT supports:** PDF, images (PNG, JPEG, TIFF), DOCX, PPTX, HTML, TXT, CSV, MD, EML
-- **AI_PARSE_DOCUMENT supports:** PDF, images (PNG, JPEG, TIFF), DOCX, PPTX, HTML, TXT
+**If Snowflake stage:** Get the full stage path and proceed.
 
-**If user selects "CSV file":** CSV files are supported by AI_EXTRACT only (not AI_PARSE_DOCUMENT). Continue to Step 2 to determine extraction goal.
+**If local file:** Help upload using PUT command:
 
-**If user selects "MD or EML file":** MD and EML files are supported by AI_EXTRACT only (not AI_PARSE_DOCUMENT). Continue to Step 2 to determine extraction goal.
-
-**If user selects "HTML or TXT file":** HTML and TXT files are supported by both AI_EXTRACT and AI_PARSE_DOCUMENT. Continue to Step 2 to determine extraction goal.
-
-**If user selects "Legacy Office (DOC, PPT)":**
-```
-Legacy Office formats (DOC, PPT) are not directly supported.
-
-Please convert to modern formats:
-- DOC → DOCX (Save As in Word)
-- PPT → PPTX (Save As in PowerPoint)
-- Or export as PDF
-
-Then upload the converted file and continue.
-```
-
-**If user selects "Excel file (XLSX, XLS)":**
-
-Excel files are not directly supported by AI_EXTRACT or AI_PARSE_DOCUMENT. Inform the user of their options:
-
-```
-Excel files (.xlsx, .xls) are not directly supported by the document AI functions.
-
-You have two options:
-
-Option 1: Convert to PDF
-- Export the Excel file as PDF from Excel/Google Sheets
-- Then upload the PDF and use AI_EXTRACT or AI_PARSE_DOCUMENT
-
-Option 2: Load directly into Snowflake (Recommended for tabular data)
-- Snowflake has native Excel support for loading data into tables:
-
--- Infer schema from Excel file
-SELECT * FROM TABLE(
-  INFER_SCHEMA(
-    LOCATION => '@my_stage/data.xlsx',
-    FILE_FORMAT => 'TYPE=EXCEL'
-  )
-);
-
--- Query Excel file directly  
-SELECT * FROM @my_stage/data.xlsx 
-(FILE_FORMAT => 'TYPE=EXCEL', SHEET_NAME => 'Sheet1');
-
--- Load into table
-COPY INTO my_table FROM @my_stage/data.xlsx
-FILE_FORMAT = (TYPE = EXCEL)
-MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE;
-
-Which option would you like to proceed with?
-```
-
-If user chooses Option 1 (convert to PDF), guide them to upload the PDF and continue with the normal flow.
-
-If user chooses Option 2 (load directly), help them with the Snowflake SQL commands above.
-
-**Question 2 - File Location:**
-```
-Where is your file stored?
-Options:
-1. Internal Snowflake stage (e.g., @my_db.my_schema.my_stage/file.pdf)
-2. External stage (S3, Azure Blob, GCS)
-3. Local file on my computer
-4. Other storage (Google Drive, Dropbox, SharePoint, OneDrive, Box)
-5. Need help setting up a stage
-```
-
-**If user selects "Local file on my computer":**
-
-Help user upload file to a Snowflake stage using PUT command.
-
-1. **First, ensure a stage exists** (or create one):
 ```sql
--- Create a stage if needed (with server-side encryption)
+-- Create a stage if needed
 CREATE STAGE IF NOT EXISTS my_db.my_schema.doc_stage
   DIRECTORY = (ENABLE = TRUE)
-  ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE')
-  COMMENT = 'Stage for document processing';
-```
+  ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE');
 
-2. **Ask user for file path:**
-```
-What is the full path to your local file?
-Example: /Users/username/Documents/invoice.pdf
-         C:\Users\username\Documents\invoice.pdf
-```
-
-3. **Generate PUT command** (must be run via SnowSQL, Snowflake CLI, or Python connector):
-
-```sql
--- Using SnowSQL or Snowflake CLI
-PUT file:///path/to/your/file.pdf @my_db.my_schema.doc_stage AUTO_COMPRESS=FALSE;
-```
-
-**Provide instructions based on user's tool:**
-
-**Option A - SnowSQL:**
-```bash
-# Install SnowSQL if not installed
-# https://docs.snowflake.com/en/user-guide/snowsql-install-config
-
-# Connect and upload
-snowsql -a <account> -u <username>
+-- Upload file (run via SnowSQL, Snowflake CLI, or Python)
 PUT file:///path/to/file.pdf @my_db.my_schema.doc_stage AUTO_COMPRESS=FALSE;
-```
 
-**Option B - Snowflake CLI (snow):**
-```bash
-# Upload using Snowflake CLI
-snow stage copy /path/to/file.pdf @my_db.my_schema.doc_stage --overwrite
-```
-
-**Option C - Python:**
-```python
-from snowflake.connector import connect
-
-conn = connect(account='...', user='...', password='...')
-cursor = conn.cursor()
-
-# Upload file
-cursor.execute("""
-    PUT file:///path/to/file.pdf @my_db.my_schema.doc_stage 
-    AUTO_COMPRESS=FALSE OVERWRITE=TRUE
-""")
-
-print("File uploaded successfully!")
-conn.close()
-```
-
-**Option D - Multiple files:**
-```sql
--- Upload all PDFs from a directory
-PUT file:///path/to/folder/*.pdf @my_db.my_schema.doc_stage AUTO_COMPRESS=FALSE;
-```
-
-4. **Verify upload:**
-```sql
--- List files in stage
+-- Verify upload
 LIST @my_db.my_schema.doc_stage;
-
--- Or using directory table
-SELECT * FROM DIRECTORY(@my_db.my_schema.doc_stage);
 ```
 
-5. **Refresh directory table** (required for DIRECTORY queries):
-```sql
-ALTER STAGE @my_db.my_schema.doc_stage REFRESH;
+**If cloud storage:** Load the `openflow` skill to set up a connector, then return here.
+
+### Step 3: Infer File Type from Extension
+
+**Do NOT ask user about file type.** Infer from the file path extension:
+
+```
+File path: @stage/invoices/invoice_001.pdf
+Extension: .pdf → PDF file (supported by all functions)
 ```
 
-After file is uploaded, continue with extraction using the stage path.
+**Extension to Format Mapping:**
 
-**If user selects "Other storage":**
-- Inform user that files need to be ingested into a Snowflake stage first
-- **Load** the `openflow` skill to help set up a connector for their storage provider
-- After openflow setup completes, return here to continue with extraction
+| Extension | Format | AI_EXTRACT | AI_PARSE_DOCUMENT | AI_COMPLETE |
+|-----------|--------|------------|-------------------|-------------|
+| .pdf | PDF | ✅ | ✅ | ✅ (convert to image) |
+| .png, .jpg, .jpeg, .tiff, .bmp, .gif, .webp | Image | ✅ | ✅ | ✅ |
+| .docx | Word | ✅ | ✅ | ❌ |
+| .pptx | PowerPoint | ✅ | ✅ | ❌ |
+| .html, .htm | HTML | ✅ | ✅ | ❌ |
+| .txt | Text | ✅ | ✅ | ❌ |
+| .csv | CSV | ✅ | ❌ | ❌ |
+| .md | Markdown | ✅ | ❌ | ❌ |
+| .eml | Email | ✅ | ❌ | ❌ |
+| .xlsx, .xls | Excel | ❌ | ❌ | ❌ |
+| .doc, .ppt | Legacy Office | ❌ | ❌ | ❌ |
 
-**Question 3 - Content Type:**
+**If unsupported format detected:**
+
+For Excel (.xlsx, .xls):
 ```
-What kind of content is in your document?
+Excel files are not supported by document AI functions.
+
 Options:
-1. Structured forms (invoices, receipts, applications)
-2. Reports/articles with text and tables
-3. Charts, graphs, blueprints, diagrams
-4. General text (manuals, policies, contracts)
+1. Export as PDF and re-upload
+2. Load directly into Snowflake (recommended for tabular data):
+
+SELECT * FROM @stage/file.xlsx (FILE_FORMAT => 'TYPE=EXCEL');
 ```
 
-### Step 2: Determine Extraction Goal
-
-**Ask** user what they want to extract:
-
+For Legacy Office (.doc, .ppt):
 ```
-What do you want to extract?
-Options:
-1. Specific fields (names, dates, amounts, IDs)
-2. Tables with defined columns
-3. Full text with layout preservation (tables, headers, structure)
-4. Text only via OCR (quick text extraction)
-5. Images and visual content for analysis (charts, blueprints)
+Legacy Office formats require conversion.
+Please save as .docx/.pptx or export as PDF.
 ```
 
-**Route based on response:**
+### Step 4: Execute Flow(s)
 
-| User Selection | Load Sub-Skill | Function |
-|----------------|----------------|----------|
-| Specific fields, Tables | `reference/extraction.md` | AI_EXTRACT |
-| Full text with layout | `reference/parsing.md` | AI_PARSE_DOCUMENT (LAYOUT mode) |
-| Text only via OCR | `reference/parsing.md` | AI_PARSE_DOCUMENT (OCR mode) |
-| Images, Charts, Blueprints | `reference/visual-analysis.md` | AI_COMPLETE (vision) |
+Based on extraction goal from Step 1, load the appropriate sub-skill(s):
 
-**After routing:** Load the appropriate sub-skill file and follow its workflow.
+| Flow | Sub-Skill | When |
+|------|-----------|------|
+| Flow A | `reference/extraction.md` | Structured fields, tables |
+| Flow B | `reference/parsing.md` | Full text, layout, OCR |
+| Flow C | `reference/visual-analysis.md` | Charts, diagrams, blueprints |
 
-### Step 3: Post-Processing Options
+**For multiple flows:** Execute sequentially, completing each before starting the next.
+
+### Step 5: Post-Processing Options
 
 After extraction/parsing/visual analysis is complete, **route to pipeline sub-skill**:
 
