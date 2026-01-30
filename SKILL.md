@@ -6,10 +6,11 @@ description: |
   analyzing charts/blueprints, building document pipelines, reading files from stage, OCR tasks.
   Triggers: 
   - Documents: document extraction, parse document, documents in stage, docs, paperwork, papers, pages, forms, sheets
-  - Files: file extraction, parse file, files in stage, process files, read PDF, attachments, uploads, assets, blobs, objects, artifacts, staged files, uploaded files
+  - Files: file extraction, parse file, files in stage, process files, read PDF, attachments, uploads, assets, blobs, objects, artifacts, staged files, uploaded files, file in stage, files on stage
   - Formats: PDFs, Word docs, Excel files, spreadsheets, slides, presentations, images, scans, screenshots, scanned documents
-  - Business docs: invoices, receipts, bills, statements, quotes, purchase orders, POs, contracts, agreements, policies, claims, reports, manuals, guides, specs, datasheets, applications, certificates, licenses, letters, memos, proposals, work orders, medical scans, lab results, prescriptions, medical records, patient records, healthcare documents, clinical notes, discharge summaries, insurance claims, EOBs, radiology reports, pathology reports
-  - Actions: extract from file, extract info, get data from, pull info from, read text from, OCR, digitize, scrape, capture data, analyze these, parse these
+  - Business docs: invoices, receipts, bills, statements, quotes, purchase orders, POs, contracts, agreements, policies, claims, reports, manuals, guides, specs, datasheets, applications, certificates, licenses, letters, memo, proposals, work orders, medical scans, lab results, prescriptions, medical records, patient records, healthcare documents, clinical notes, discharge summaries, insurance claims, EOBs, radiology reports, pathology reports
+  - Visual content: charts, graphs, diagrams, blueprints, flowcharts, floor plans, schematics, drawings, plots, bar chart, line chart, pie chart, infographic, visual analysis, analyze chart, analyze graph, analyze diagram
+  - Actions: extract from file, extract info, get data from, pull info from, read text from, OCR, digitize, scrape, capture data, analyze these, parse these, summarize, summary of, analyze file, analyze document, analyze image, what is in this file, read this file
   - Functions: AI_EXTRACT, AI_PARSE_DOCUMENT, AI_COMPLETE, document AI
 ---
 

@@ -17,10 +17,11 @@ The skill is triggered by mentions of:
 | Category | Trigger Words |
 |----------|---------------|
 | **Documents** | document, docs, paperwork, papers, pages, forms, sheets |
-| **Files** | file, attachments, uploads, assets, blobs, objects, artifacts, staged files |
+| **Files** | file, attachments, uploads, assets, blobs, objects, artifacts, staged files, file in stage, files on stage |
 | **Formats** | PDF, Word doc, Excel, spreadsheet, slides, presentation, image, scan, screenshot |
 | **Business Docs** | invoice, receipt, bill, statement, quote, PO, contract, agreement, policy, claim, report, manual, guide, spec, datasheet, application, certificate, license, letter, memo, proposal, work order, medical scan, lab result, prescription, medical record, patient record, healthcare document, clinical note, discharge summary, insurance claim, EOB, radiology report, pathology report |
-| **Actions** | extract, parse, OCR, digitize, scrape, capture data, read text from, get data from, pull info from |
+| **Visual Content** | charts, graphs, diagrams, blueprints, flowcharts, floor plans, schematics, drawings, plots, bar chart, line chart, pie chart, infographic, visual analysis |
+| **Actions** | extract, parse, OCR, digitize, scrape, capture data, read text from, get data from, pull info from, summarize, summary of, analyze file, analyze chart, what is in this file |
 | **Functions** | AI_EXTRACT, AI_PARSE_DOCUMENT, AI_COMPLETE |
 
 ## Directory Structure
