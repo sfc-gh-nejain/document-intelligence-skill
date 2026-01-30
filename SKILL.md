@@ -406,6 +406,24 @@ SELECT AI_PARSE_DOCUMENT(
 
 This step validates extraction on a single file before batch processing, with iterative prompt refinement using LLM-as-judge.
 
+**AI_EXTRACT Constraints - Inform the user:**
+```
+Before proceeding, please note the following AI_EXTRACT limitations:
+
+| Constraint | Limit |
+|------------|-------|
+| Max file size | 100 MB |
+| Max pages | 125 per call |
+| Entity questions | 100 per call (512 tokens each) |
+| Table questions | 10 per call (4096 tokens each) |
+| Image dimensions | 50x50 to 10,000x10,000 pixels |
+
+Note: 1 table question = 10 entity questions for quota purposes.
+
+If your documents exceed these limits, we'll need to use chunking strategies 
+(see "Large Document Strategies" section).
+```
+
 #### 2.5a: Define Initial Extraction Fields
 
 **Ask** user for the fields they want to extract:
