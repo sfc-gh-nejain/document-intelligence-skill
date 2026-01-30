@@ -85,7 +85,7 @@ What would you like to extract or analyze from your document?
 
 Options:
 1. Structured extraction - Extract specific fields, tables, or data points (e.g., invoice number, line items)
-2. Full text parsing - Get complete document text with layout and formatting preserved (OCR for scans)
+2. Full text parsing - Get complete document text, with or without layout preserved (OCR for scans)
 3. Visual analysis - Analyze charts, graphs, diagrams, blueprints, or other visual content
 4. Multiple types - Combine any of the above (e.g., extract fields AND analyze a chart)
 
@@ -285,7 +285,7 @@ What do you want to extract?
 
 Options:
 1. Structured extraction - Specific fields or tables (AI_EXTRACT)
-2. Full text parsing - Complete text with layout (AI_PARSE_DOCUMENT)
+2. Full text parsing - Complete text, with or without layout (AI_PARSE_DOCUMENT)
 3. Visual analysis - Charts, blueprints, diagrams (AI_COMPLETE)
 4. Multiple types - Combine approaches
 
