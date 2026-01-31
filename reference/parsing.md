@@ -20,33 +20,16 @@ This sub-skill is triggered when the user selects:
 
 ## Cost Information
 
-**IMPORTANT: Show this cost information to the user when first using AI_PARSE_DOCUMENT:**
+**Show this pricing information to the user for awareness (NOT for decision making):**
 
 ```
-AI_PARSE_DOCUMENT Pricing:
+AI_PARSE_DOCUMENT Pricing (for reference only):
 
-LAYOUT Mode (preserves formatting, tables, structure):
-- Cost: 3.33 credits per 1,000 pages
-- Per page: ~0.00333 credits
+LAYOUT Mode: 3.33 credits per 1,000 pages (~0.00333/page)
+OCR Mode: 0.5 credits per 1,000 pages (~0.0005/page)
 
-OCR Mode (text extraction from scanned documents):
-- Cost: 0.5 credits per 1,000 pages
-- Per page: ~0.0005 credits
-
-Example cost estimates (LAYOUT Mode):
-- 10 pages: ~0.033 credits
-- 100 pages: ~0.333 credits
-- 500 pages: ~1.67 credits
-- 1,000 pages: 3.33 credits
-
-Example cost estimates (OCR Mode):
-- 10 pages: ~0.005 credits
-- 100 pages: ~0.05 credits
-- 500 pages: ~0.25 credits
-- 1,000 pages: 0.5 credits
-
-Tip: Use OCR mode for simple text extraction (6x cheaper than LAYOUT mode).
-     Use page_filter to process only the pages you need.
+Note: Choose the mode based on document structure and quality needs, 
+      not pricing. See "Parsing Modes" section for guidance.
 ```
 
 ## Supported Formats
@@ -57,10 +40,29 @@ PDF, PNG, PPTX/PPT, DOC/DOCX, JPEG/JPG, HTM/HTML, TEXT/TXT, TIF/TIFF, BMP, GIF, 
 
 ## Parsing Modes
 
-| Mode | Best For | Output |
-|------|----------|--------|
-| LAYOUT | Documents with tables, headers, structure | Markdown with formatting |
-| OCR | Scanned documents, images of text | Plain text |
+**IMPORTANT: Focus on QUALITY, not price. Choose mode based on document characteristics.**
+
+| Mode | When to Use | Output |
+|------|-------------|--------|
+| **LAYOUT** | Documents with headings, sections, tables, columns, structured formatting | Markdown with formatting preserved |
+| **OCR** | Text-heavy documents where page layout is not relevant | Plain text extraction |
+
+### Mode Selection Guide
+
+**Use LAYOUT Mode when document contains:**
+- Headings and subheadings
+- Tables or tabular data
+- Multi-column layouts
+- Structured sections (e.g., forms, reports, contracts)
+- Headers and footers that matter
+- Bullet points or numbered lists
+- Any formatting that conveys meaning
+
+**Use OCR Mode when:**
+- Document is purely text with no meaningful structure
+- You only need raw text content
+- Layout and formatting are not relevant to your use case
+- Processing scanned handwritten notes or simple text images
 
 ---
 
