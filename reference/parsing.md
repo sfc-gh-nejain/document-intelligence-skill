@@ -82,6 +82,36 @@ Options:
 
 ---
 
+## Step 2: Display Cost BEFORE Execution
+
+### ⚠️ MANDATORY: Show Cost to User
+
+**You MUST show this cost information to the user BEFORE running AI_PARSE_DOCUMENT:**
+
+```
+Before I run AI_PARSE_DOCUMENT, here's the cost information:
+
+AI_PARSE_DOCUMENT Pricing:
+- LAYOUT Mode: 3.33 credits per 1,000 pages (~0.00333/page)
+- OCR Mode: 0.5 credits per 1,000 pages (~0.0005/page)
+
+For your document ([X] pages) in [LAYOUT/OCR] mode:
+- Estimated cost: [calculated cost] credits
+
+Note: Pricing shown for awareness only. Mode selection should be 
+based on document structure, not cost.
+
+Shall I proceed with parsing?
+```
+
+**Do NOT skip this step.** Always calculate and show the estimated cost based on:
+1. Number of pages to be processed
+2. Selected mode (LAYOUT or OCR)
+
+---
+
+## Step 3: Execute Parsing
+
 ### If "Parse entire document"
 
 ```sql

@@ -413,6 +413,30 @@ Then ask user to select from the list.
 
 ## Step 3: Run Test Extraction
 
+### ⚠️ MANDATORY: Display Cost BEFORE Execution
+
+**You MUST show this cost information to the user BEFORE running AI_EXTRACT:**
+
+```
+Before I run AI_EXTRACT, here's the cost information:
+
+AI_EXTRACT Pricing:
+- ~970 tokens per page
+- 5 credits per million tokens
+- Estimated: ~0.00485 credits per page
+
+For your test file ([X] pages):
+- Estimated cost: [X × 0.00485] credits
+
+Shall I proceed with the extraction?
+```
+
+**Do NOT skip this step.** Always calculate and show the estimated cost based on the file's page count.
+
+---
+
+### Execute Test Extraction
+
 Execute AI_EXTRACT on the single test file:
 
 ```sql
