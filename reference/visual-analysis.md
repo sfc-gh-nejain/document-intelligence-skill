@@ -31,7 +31,7 @@ AI_COMPLETE(model, prompt, file [, model_parameters])
 |----------|-------------|
 | `model` | Model name: 'claude-3-5-sonnet', 'claude-4-sonnet', 'llama4-maverick', 'pixtral-large', etc. |
 | `prompt` | Text prompt (string) describing what to analyze |
-| `file` | `TO_FILE('@stage', 'filename')` - the image file |
+| `file` | `TO_FILE('@DB.SCHEMA.STAGE', 'filename')` - the image file |
 | `model_parameters` | Optional: `{'max_tokens': 4096, 'temperature': 0}` |
 
 **Example:**
@@ -39,7 +39,7 @@ AI_COMPLETE(model, prompt, file [, model_parameters])
 SELECT AI_COMPLETE(
   'claude-3-5-sonnet',
   'Extract all data points from this chart.',
-  TO_FILE('@db.schema.stage', 'chart.png')
+  TO_FILE('@MYDB.PUBLIC.IMAGES_STAGE', 'chart.png')
 ) AS analysis;
 ```
 
@@ -49,6 +49,36 @@ SELECT AI_COMPLETE(
 - Maximum image size: 10 MB (3.75 MB for Claude models)
 - Claude models: max resolution 8000x8000
 - Stage must have server-side encryption enabled
+
+## TO_FILE Syntax (IMPORTANT)
+
+**Always use the fully qualified stage name with @ prefix:**
+
+```sql
+TO_FILE('@DB.SCHEMA.STAGE', 'filename.png')
+```
+
+| Component | Format | Example |
+|-----------|--------|---------|
+| Stage name | `'@DB.SCHEMA.STAGE'` | `'@MYDB.PUBLIC.IMAGES_STAGE'` |
+| File path | `'relative/path/file.ext'` | `'charts/sales_chart.png'` |
+
+**Examples:**
+```sql
+-- Single image
+TO_FILE('@MYDB.PUBLIC.IMAGES_STAGE', 'chart.png')
+
+-- Image in subfolder
+TO_FILE('@MYDB.PUBLIC.IMAGES_STAGE', 'blueprints/floor_plan.png')
+
+-- Using variable for batch processing
+TO_FILE('@MYDB.PUBLIC.IMAGES_STAGE', relative_path)
+```
+
+**Common mistakes to avoid:**
+- ❌ `TO_FILE('@stage', 'file.png')` - Missing DB.SCHEMA
+- ❌ `TO_FILE('DB.SCHEMA.STAGE', 'file.png')` - Missing @ prefix
+- ✅ `TO_FILE('@DB.SCHEMA.STAGE', 'file.png')` - Correct format
 
 ---
 

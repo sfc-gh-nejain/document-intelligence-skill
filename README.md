@@ -90,6 +90,36 @@ The skill automatically re-evaluates which flow is best for each request:
 
 See [official documentation](https://docs.snowflake.com/en/user-guide/snowflake-cortex/parse-document#input-requirements) for details.
 
+### TO_FILE Syntax (IMPORTANT)
+
+**Always use the fully qualified stage name with @ prefix:**
+
+```sql
+TO_FILE('@DB.SCHEMA.STAGE', 'filename.pdf')
+```
+
+| Component | Format | Example |
+|-----------|--------|---------|
+| Stage name | `'@DB.SCHEMA.STAGE'` | `'@MYDB.PUBLIC.DOC_STAGE'` |
+| File path | `'relative/path/file.ext'` | `'invoices/invoice_001.pdf'` |
+
+**Examples:**
+```sql
+-- Single file
+TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'invoice.pdf')
+
+-- File in subfolder
+TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'invoices/2024/invoice_001.pdf')
+
+-- Using variable for batch processing
+TO_FILE('@MYDB.PUBLIC.DOC_STAGE', relative_path)
+```
+
+**Common mistakes to avoid:**
+- ❌ `TO_FILE('@stage', 'file.pdf')` - Missing DB.SCHEMA
+- ❌ `TO_FILE('DB.SCHEMA.STAGE', 'file.pdf')` - Missing @ prefix
+- ✅ `TO_FILE('@DB.SCHEMA.STAGE', 'file.pdf')` - Correct format
+
 ## Unified Workflow
 
 ```
@@ -341,7 +371,7 @@ See [official documentation](https://docs.snowflake.com/en/user-guide/snowflake-
 ### Flow A: Extract Invoice Fields (AI_EXTRACT)
 ```sql
 SELECT AI_EXTRACT(
-  file => TO_FILE('@my_stage', 'invoice.pdf'),
+  file => TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'invoice.pdf'),
   responseFormat => {
     'invoice_number': 'What is the invoice number?',
     'vendor': 'What is the vendor name?',
@@ -355,12 +385,12 @@ For documents where all key info is on the first page (invoices, forms):
 ```sql
 -- Step 1: Extract first page only (one-time setup: create extract_pdf_pages procedure)
 CALL db.schema.extract_pdf_pages(
-  '@my_stage', 'invoice.pdf', '@extracted_pages_stage', 1
+  '@MYDB.PUBLIC.DOC_STAGE', 'invoice.pdf', '@MYDB.PUBLIC.EXTRACTED_PAGES_STAGE', 1
 );
 
 -- Step 2: Run AI_EXTRACT on the single page (faster + cheaper)
 SELECT AI_EXTRACT(
-  file => TO_FILE('@extracted_pages_stage', 'invoice_page_1.pdf'),
+  file => TO_FILE('@MYDB.PUBLIC.EXTRACTED_PAGES_STAGE', 'invoice_page_1.pdf'),
   responseFormat => {
     'invoice_number': 'What is the invoice number?',
     'vendor': 'What is the vendor name?',
@@ -378,7 +408,7 @@ SELECT
   SNOWFLAKE.CORTEX.EMBED_TEXT_1024('voyage-multilingual-2', f.value:content::STRING)
 FROM (
   SELECT AI_PARSE_DOCUMENT(
-    TO_FILE('@my_stage', 'document.pdf'),
+    TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'document.pdf'),
     {'mode': 'LAYOUT', 'page_split': true}
   ) AS parsed
 ), LATERAL FLATTEN(input => parsed:pages) f;
@@ -388,25 +418,25 @@ FROM (
 ```sql
 -- Parse entire document
 SELECT AI_PARSE_DOCUMENT(
-  TO_FILE('@stage', 'document.pdf'),
+  TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'document.pdf'),
   {'mode': 'LAYOUT', 'page_split': true}
 );
 
 -- Parse specific page range (pages 1-50, 0-indexed)
 SELECT AI_PARSE_DOCUMENT(
-  TO_FILE('@stage', 'document.pdf'),
+  TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'document.pdf'),
   {'mode': 'LAYOUT', 'page_filter': [{'start': 0, 'end': 50}]}
 );
 
 -- Parse specific pages (pages 1, 5, 10, 25 → 0-indexed: 0, 4, 9, 24)
 SELECT AI_PARSE_DOCUMENT(
-  TO_FILE('@stage', 'document.pdf'),
+  TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'document.pdf'),
   {'mode': 'LAYOUT', 'page_filter': [0, 4, 9, 24]}
 );
 
 -- Parse multiple ranges (pages 1-10 and 50-60)
 SELECT AI_PARSE_DOCUMENT(
-  TO_FILE('@stage', 'document.pdf'),
+  TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'document.pdf'),
   {'mode': 'LAYOUT', 'page_filter': [{'start': 0, 'end': 10}, {'start': 49, 'end': 60}]}
 );
 ```
@@ -419,7 +449,7 @@ SELECT AI_PARSE_DOCUMENT(
 SELECT AI_COMPLETE(
   'claude-3-5-sonnet',
   'Analyze this chart. Extract all data points, labels, and trends.',
-  TO_FILE('@my_stage', 'chart.png')
+  TO_FILE('@MYDB.PUBLIC.IMAGES_STAGE', 'chart.png')
 ) AS analysis;
 ```
 
@@ -430,9 +460,9 @@ SELECT AI_COMPLETE(
 
 -- Step 2: Convert PDF to images
 CALL db.schema.convert_pdf_to_images(
-  '@my_stage',
+  '@MYDB.PUBLIC.DOC_STAGE',
   'blueprint.pdf',
-  '@images_stage',
+  '@MYDB.PUBLIC.IMAGES_STAGE',
   200,    -- DPI
   'PNG',  -- Format
   [1]     -- Specific pages (or NULL for all)
@@ -442,7 +472,7 @@ CALL db.schema.convert_pdf_to_images(
 SELECT AI_COMPLETE(
   'claude-3-5-sonnet',
   'Analyze this blueprint. Identify all components, dimensions, and specifications.',
-  TO_FILE('@images_stage', 'blueprint_page_1.png')
+  TO_FILE('@MYDB.PUBLIC.IMAGES_STAGE', 'blueprint_page_1.png')
 ) AS analysis;
 ```
 
@@ -452,7 +482,7 @@ When AI_EXTRACT doesn't produce accurate results, use this alternative:
 -- Parse document and extract with structured JSON output
 WITH parsed_doc AS (
   SELECT AI_PARSE_DOCUMENT(
-    TO_FILE('@my_stage', 'invoice.pdf'),
+TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'invoice.pdf'),
     {'mode': 'LAYOUT'}
   ):content::STRING AS document_text
 )
@@ -501,7 +531,7 @@ FROM parsed_doc;
 ```sql
 -- Get total pages before processing
 SELECT AI_PARSE_DOCUMENT(
-  TO_FILE('@stage', 'document.pdf'),
+  TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'document.pdf'),
   {'mode': 'OCR', 'page_filter': [{'start': 0, 'end': 1}]}
 ):pageCount AS total_pages;
 ```
@@ -543,7 +573,7 @@ When files exceed 125 pages, users choose between two approaches:
 -- Parse entire document, then extract with structured output
 WITH parsed_doc AS (
   SELECT AI_PARSE_DOCUMENT(
-    TO_FILE('@my_stage', 'contract.pdf'),
+    TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'contract.pdf'),
     {'mode': 'LAYOUT'}
   ):content::STRING AS document_text
 )

@@ -38,6 +38,36 @@ PDF, PNG, PPTX/PPT, DOC/DOCX, JPEG/JPG, HTM/HTML, TEXT/TXT, TIF/TIFF, BMP, GIF, 
 
 **Note:** CSV, MD, and EML files are NOT supported by AI_PARSE_DOCUMENT (use AI_EXTRACT instead).
 
+## TO_FILE Syntax (IMPORTANT)
+
+**Always use the fully qualified stage name with @ prefix:**
+
+```sql
+TO_FILE('@DB.SCHEMA.STAGE', 'filename.pdf')
+```
+
+| Component | Format | Example |
+|-----------|--------|---------|
+| Stage name | `'@DB.SCHEMA.STAGE'` | `'@MYDB.PUBLIC.DOC_STAGE'` |
+| File path | `'relative/path/file.ext'` | `'documents/report.pdf'` |
+
+**Examples:**
+```sql
+-- Single file
+TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'report.pdf')
+
+-- File in subfolder
+TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'reports/2024/annual_report.pdf')
+
+-- Using variable for batch processing
+TO_FILE('@MYDB.PUBLIC.DOC_STAGE', relative_path)
+```
+
+**Common mistakes to avoid:**
+- ❌ `TO_FILE('@stage', 'file.pdf')` - Missing DB.SCHEMA
+- ❌ `TO_FILE('DB.SCHEMA.STAGE', 'file.pdf')` - Missing @ prefix
+- ✅ `TO_FILE('@DB.SCHEMA.STAGE', 'file.pdf')` - Correct format
+
 ## Parsing Modes
 
 **IMPORTANT: Focus on QUALITY, not price. Choose mode based on document characteristics.**

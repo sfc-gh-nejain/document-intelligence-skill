@@ -29,6 +29,36 @@ Options:
 | Store results | Create table and insert results |
 | Set up pipeline | Continue to Pipeline Setup below |
 
+## TO_FILE Syntax (IMPORTANT)
+
+**Always use the fully qualified stage name with @ prefix in all pipeline SQL:**
+
+```sql
+TO_FILE('@DB.SCHEMA.STAGE', 'filename.pdf')
+```
+
+| Component | Format | Example |
+|-----------|--------|---------|
+| Stage name | `'@DB.SCHEMA.STAGE'` | `'@MYDB.PUBLIC.DOC_STAGE'` |
+| File path | `'relative/path/file.ext'` | `'documents/file.pdf'` |
+
+**Examples:**
+```sql
+-- Single file reference
+TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'invoice.pdf')
+
+-- Using variable from DIRECTORY() for batch processing
+TO_FILE('@MYDB.PUBLIC.DOC_STAGE', relative_path)
+
+-- In a pipeline task
+TO_FILE('@MYDB.PUBLIC.DOC_STAGE', f.relative_path)
+```
+
+**Common mistakes to avoid:**
+- ❌ `TO_FILE('@stage', 'file.pdf')` - Missing DB.SCHEMA
+- ❌ `TO_FILE('DB.SCHEMA.STAGE', 'file.pdf')` - Missing @ prefix
+- ✅ `TO_FILE('@DB.SCHEMA.STAGE', 'file.pdf')` - Correct format
+
 ---
 
 ## Pipeline Setup

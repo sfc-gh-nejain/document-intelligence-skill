@@ -45,6 +45,36 @@ Formula: (pages × 970 tokens) / 1,000,000 × 5 credits
 Tip: Use page optimization to extract only specific pages and reduce costs.
 ```
 
+## TO_FILE Syntax (IMPORTANT)
+
+**Always use the fully qualified stage name with @ prefix:**
+
+```sql
+TO_FILE('@DB.SCHEMA.STAGE', 'filename.pdf')
+```
+
+| Component | Format | Example |
+|-----------|--------|---------|
+| Stage name | `'@DB.SCHEMA.STAGE'` | `'@MYDB.PUBLIC.DOC_STAGE'` |
+| File path | `'relative/path/file.ext'` | `'invoices/invoice_001.pdf'` |
+
+**Examples:**
+```sql
+-- Single file
+TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'invoice.pdf')
+
+-- File in subfolder
+TO_FILE('@MYDB.PUBLIC.DOC_STAGE', 'invoices/2024/invoice_001.pdf')
+
+-- Using variable for batch processing
+TO_FILE('@MYDB.PUBLIC.DOC_STAGE', relative_path)
+```
+
+**Common mistakes to avoid:**
+- ❌ `TO_FILE('@stage', 'file.pdf')` - Missing DB.SCHEMA
+- ❌ `TO_FILE('DB.SCHEMA.STAGE', 'file.pdf')` - Missing @ prefix
+- ✅ `TO_FILE('@DB.SCHEMA.STAGE', 'file.pdf')` - Correct format
+
 ## Workflow
 
 ```
