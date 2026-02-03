@@ -19,6 +19,37 @@ PNG, JPEG/JPG, TIFF, BMP, GIF, WEBP
 
 **Non-image files (PDF, DOCX, PPTX) must be converted to images before analysis.**
 
+## AI_COMPLETE Syntax for Single Image Analysis
+
+**IMPORTANT:** Use the correct single-image syntax for AI_COMPLETE:
+
+```sql
+AI_COMPLETE(model, prompt, file [, model_parameters])
+```
+
+| Argument | Description |
+|----------|-------------|
+| `model` | Model name: 'claude-3-5-sonnet', 'claude-4-sonnet', 'llama4-maverick', 'pixtral-large', etc. |
+| `prompt` | Text prompt (string) describing what to analyze |
+| `file` | `TO_FILE('@stage', 'filename')` - the image file |
+| `model_parameters` | Optional: `{'max_tokens': 4096, 'temperature': 0}` |
+
+**Example:**
+```sql
+SELECT AI_COMPLETE(
+  'claude-3-5-sonnet',
+  'Extract all data points from this chart.',
+  TO_FILE('@db.schema.stage', 'chart.png')
+) AS analysis;
+```
+
+**Supported models for vision:** claude-4-opus, claude-4-sonnet, claude-3-7-sonnet, claude-3-5-sonnet, llama4-maverick, llama4-scout, openai-o4-mini, openai-gpt-4.1, pixtral-large
+
+**Constraints:**
+- Maximum image size: 10 MB (3.75 MB for Claude models)
+- Claude models: max resolution 8000x8000
+- Stage must have server-side encryption enabled
+
 ---
 
 ## Step 1: Check File Type (Automatic)
@@ -109,20 +140,16 @@ User questions:
 Use the user's questions to build the analysis prompt:
 
 ```sql
--- Direct visual analysis with AI_COMPLETE
+-- Direct visual analysis with AI_COMPLETE (Single Image format)
 -- Replace <USER_QUESTIONS> with the questions gathered in Step 2
 SELECT AI_COMPLETE(
   'claude-3-5-sonnet',
-  [
-    {
-      'role': 'user',
-      'content': [
-        {'type': 'image', 'image_url': {'url': TO_FILE('@db.schema.stage', 'chart.png')}},
-        {'type': 'text', 'text': 'Analyze this image and answer the following questions:\n\n<USER_QUESTIONS>\n\nProvide detailed answers for each question.'}
-      ]
-    }
-  ],
-  {'max_tokens': 4096}
+  'Analyze this image and answer the following questions:
+
+<USER_QUESTIONS>
+
+Provide detailed answers for each question.',
+  TO_FILE('@db.schema.stage', 'chart.png')
 ) AS analysis;
 ```
 
@@ -131,21 +158,23 @@ SELECT AI_COMPLETE(
 -- User asked: "What are the data points? What is the trend?"
 SELECT AI_COMPLETE(
   'claude-3-5-sonnet',
-  [
-    {
-      'role': 'user',
-      'content': [
-        {'type': 'image', 'image_url': {'url': TO_FILE('@db.schema.stage', 'sales_chart.png')}},
-        {'type': 'text', 'text': 'Analyze this chart and answer the following questions:
+  'Analyze this chart and answer the following questions:
 
 1. What are all the data points shown? List each with its exact value.
 2. What is the overall trend? Is it increasing, decreasing, or stable?
 
-Provide detailed answers for each question.'}
-      ]
-    }
-  ],
-  {'max_tokens': 4096}
+Provide detailed answers for each question.',
+  TO_FILE('@db.schema.stage', 'sales_chart.png')
+) AS analysis;
+```
+
+**With optional model parameters:**
+```sql
+SELECT AI_COMPLETE(
+  'claude-3-5-sonnet',
+  'Extract all data from this chart.',
+  TO_FILE('@db.schema.stage', 'chart.png'),
+  {'max_tokens': 4096, 'temperature': 0}
 ) AS analysis;
 ```
 
@@ -328,16 +357,12 @@ Use the user's questions from Step 2:
 -- Replace <USER_QUESTIONS> with questions gathered in Step 2
 SELECT AI_COMPLETE(
   'claude-3-5-sonnet',
-  [
-    {
-      'role': 'user',
-      'content': [
-        {'type': 'image', 'image_url': {'url': TO_FILE('@db.schema.images_stage', 'blueprint_page_1.png')}},
-        {'type': 'text', 'text': 'Analyze this image and answer the following questions:\n\n<USER_QUESTIONS>\n\nProvide detailed answers for each question.'}
-      ]
-    }
-  ],
-  {'max_tokens': 4096}
+  'Analyze this image and answer the following questions:
+
+<USER_QUESTIONS>
+
+Provide detailed answers for each question.',
+  TO_FILE('@db.schema.images_stage', 'blueprint_page_1.png')
 ) AS analysis;
 ```
 
@@ -536,23 +561,15 @@ Use these templates as a starting point, then customize based on user's specific
 ```sql
 SELECT AI_COMPLETE(
   'claude-3-5-sonnet',
-  [
-    {
-      'role': 'user',
-      'content': [
-        {'type': 'image', 'image_url': {'url': TO_FILE('@stage', 'chart.png')}},
-        {'type': 'text', 'text': 'Analyze this chart. Extract:
+  'Analyze this chart. Extract:
 1. Chart type (bar, line, pie, etc.)
 2. Title and axis labels
 3. All data points with their values
 4. Key trends or insights
 5. Any annotations or legends
 
-Format the data points as a table if possible.'}
-      ]
-    }
-  ],
-  {'max_tokens': 4096}
+Format the data points as a table if possible.',
+  TO_FILE('@db.schema.stage', 'chart.png')
 ) AS chart_analysis;
 ```
 
@@ -561,22 +578,14 @@ Format the data points as a table if possible.'}
 ```sql
 SELECT AI_COMPLETE(
   'claude-3-5-sonnet',
-  [
-    {
-      'role': 'user',
-      'content': [
-        {'type': 'image', 'image_url': {'url': TO_FILE('@stage', 'blueprint.png')}},
-        {'type': 'text', 'text': 'Analyze this technical drawing/blueprint. Identify:
+  'Analyze this technical drawing/blueprint. Identify:
 1. All labeled components and parts
 2. Dimensions and measurements with units
 3. Materials specifications if shown
 4. Assembly instructions or notes
 5. Scale information
-6. Any warnings or special instructions'}
-      ]
-    }
-  ],
-  {'max_tokens': 4096}
+6. Any warnings or special instructions',
+  TO_FILE('@db.schema.stage', 'blueprint.png')
 ) AS blueprint_analysis;
 ```
 
@@ -585,22 +594,14 @@ SELECT AI_COMPLETE(
 ```sql
 SELECT AI_COMPLETE(
   'claude-3-5-sonnet',
-  [
-    {
-      'role': 'user',
-      'content': [
-        {'type': 'image', 'image_url': {'url': TO_FILE('@stage', 'diagram.png')}},
-        {'type': 'text', 'text': 'Analyze this diagram/flowchart. Describe:
+  'Analyze this diagram/flowchart. Describe:
 1. Overall purpose of the diagram
 2. All nodes/boxes and their labels
 3. Connections and relationships between elements
 4. Flow direction and sequence
 5. Decision points and branches
-6. Start and end points'}
-      ]
-    }
-  ],
-  {'max_tokens': 4096}
+6. Start and end points',
+  TO_FILE('@db.schema.stage', 'diagram.png')
 ) AS diagram_analysis;
 ```
 
@@ -609,16 +610,8 @@ SELECT AI_COMPLETE(
 ```sql
 SELECT AI_COMPLETE(
   'claude-3-5-sonnet',
-  [
-    {
-      'role': 'user',
-      'content': [
-        {'type': 'image', 'image_url': {'url': TO_FILE('@stage', 'image.png')}},
-        {'type': 'text', 'text': 'Describe this image in detail. Include all visible text, numbers, symbols, and visual elements.'}
-      ]
-    }
-  ],
-  {'max_tokens': 4096}
+  'Describe this image in detail. Include all visible text, numbers, symbols, and visual elements.',
+  TO_FILE('@db.schema.stage', 'image.png')
 ) AS visual_analysis;
 ```
 
@@ -634,16 +627,8 @@ SELECT
   relative_path AS image_file,
   AI_COMPLETE(
     'claude-3-5-sonnet',
-    [
-      {
-        'role': 'user',
-        'content': [
-          {'type': 'image', 'image_url': {'url': TO_FILE('@db.schema.images_stage', relative_path)}},
-          {'type': 'text', 'text': 'Analyze this chart and extract all data points.'}
-        ]
-      }
-    ],
-    {'max_tokens': 4096}
+    'Analyze this chart and extract all data points.',
+    TO_FILE('@db.schema.images_stage', relative_path)
   ) AS analysis
 FROM DIRECTORY(@db.schema.images_stage)
 WHERE relative_path LIKE '%.png' OR relative_path LIKE '%.jpg';
@@ -674,16 +659,8 @@ SELECT
   'blueprint',
   PARSE_JSON(AI_COMPLETE(
     'claude-3-5-sonnet',
-    [
-      {
-        'role': 'user',
-        'content': [
-          {'type': 'image', 'image_url': {'url': TO_FILE('@db.schema.images_stage', 'blueprint_page_1.png')}},
-          {'type': 'text', 'text': 'Analyze this blueprint. Return a JSON object with keys: components (array), measurements (array), materials (array), notes (string).'}
-        ]
-      }
-    ],
-    {'max_tokens': 4096}
+    'Analyze this blueprint. Return a JSON object with keys: components (array), measurements (array), materials (array), notes (string).',
+    TO_FILE('@db.schema.images_stage', 'blueprint_page_1.png')
   ));
 ```
 
@@ -696,12 +673,7 @@ For consistent JSON output, use a structured prompt:
 ```sql
 SELECT AI_COMPLETE(
   'claude-3-5-sonnet',
-  [
-    {
-      'role': 'user',
-      'content': [
-        {'type': 'image', 'image_url': {'url': TO_FILE('@db.schema.images_stage', 'chart.png')}},
-        {'type': 'text', 'text': 'Analyze this chart and return a JSON object with the following structure:
+  'Analyze this chart and return a JSON object with the following structure:
 {
   "chart_type": "string (bar, line, pie, scatter, etc.)",
   "title": "string",
@@ -714,11 +686,8 @@ SELECT AI_COMPLETE(
   "insights": ["string"]
 }
 
-Return ONLY the JSON object, no additional text.'}
-      ]
-    }
-  ],
-  {'max_tokens': 4096}
+Return ONLY the JSON object, no additional text.',
+  TO_FILE('@db.schema.images_stage', 'chart.png')
 ) AS structured_chart_analysis;
 ```
 

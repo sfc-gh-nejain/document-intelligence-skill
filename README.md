@@ -415,19 +415,12 @@ SELECT AI_PARSE_DOCUMENT(
 
 **If image file (PNG, JPEG, etc.) - analyze directly:**
 ```sql
+-- AI_COMPLETE single-image syntax: (model, prompt, file [, options])
 SELECT AI_COMPLETE(
   'claude-3-5-sonnet',
-  [
-    {
-      'role': 'user',
-      'content': [
-        {'type': 'image', 'image_url': {'url': TO_FILE('@my_stage', 'chart.png')}},
-        {'type': 'text', 'text': 'Analyze this chart. Extract all data points, labels, and trends.'}
-      ]
-    }
-  ],
-  {'max_tokens': 4096}
-);
+  'Analyze this chart. Extract all data points, labels, and trends.',
+  TO_FILE('@my_stage', 'chart.png')
+) AS analysis;
 ```
 
 **If PDF file - convert to image first:**
@@ -448,17 +441,9 @@ CALL db.schema.convert_pdf_to_images(
 -- Step 3: Analyze converted image
 SELECT AI_COMPLETE(
   'claude-3-5-sonnet',
-  [
-    {
-      'role': 'user',
-      'content': [
-        {'type': 'image', 'image_url': {'url': TO_FILE('@images_stage', 'blueprint_page_1.png')}},
-        {'type': 'text', 'text': 'Analyze this blueprint. Identify all components, dimensions, and specifications.'}
-      ]
-    }
-  ],
-  {'max_tokens': 4096}
-);
+  'Analyze this blueprint. Identify all components, dimensions, and specifications.',
+  TO_FILE('@images_stage', 'blueprint_page_1.png')
+) AS analysis;
 ```
 
 ### Fallback: AI_PARSE_DOCUMENT + AI_COMPLETE Structured Outputs

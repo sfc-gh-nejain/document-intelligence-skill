@@ -66,7 +66,36 @@ PDF, PNG, PPTX/PPT, DOC/DOCX, JPEG/JPG, HTM/HTML, TEXT/TXT, TIF/TIFF, BMP, GIF, 
 
 ---
 
-## Step 1: Page Optimization
+## ⚠️ MANDATORY Workflow - Follow ALL Steps
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    PARSING WORKFLOW (ALL STEPS REQUIRED)            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  Step 1: Page Optimization ──→ Step 2: Display Cost                 │
+│  (REQUIRED - Ask user)         (REQUIRED - Show before execution)   │
+│                                        │                            │
+│                                        ▼                            │
+│                              Step 3: Test Single File               │
+│                              (REQUIRED - Parse ONE file first)      │
+│                                        │                            │
+│                                        ▼                            │
+│                              Step 4: Display Results                │
+│                              (REQUIRED - Show parsed content)       │
+│                                        │                            │
+│                                        ▼                            │
+│                              Step 5: Post-Processing Options        │
+│                              (REQUIRED - Ask what to do next)       │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**CRITICAL:** Do NOT skip any step. Each step is mandatory for the parsing flow.
+
+---
+
+## Step 1: Page Optimization (REQUIRED)
 
 Before parsing, ask user about page optimization to improve performance and reduce costs.
 
@@ -82,9 +111,9 @@ Options:
 
 ---
 
-## Step 2: Display Cost BEFORE Execution
+## Step 2: Display Cost BEFORE Execution (REQUIRED)
 
-### ⚠️ MANDATORY: Show Cost to User
+### ⚠️ MANDATORY: Show Cost to User - Do NOT Skip
 
 **You MUST show this cost information to the user BEFORE running AI_PARSE_DOCUMENT:**
 
@@ -110,23 +139,27 @@ Shall I proceed with parsing?
 
 ---
 
-## Step 3: Execute Parsing
+## Step 3: Test Single File First (REQUIRED)
 
-### If "Parse entire document"
+### ⚠️ MANDATORY: Parse ONE File First Before Batch Processing
+
+**Always test with a single representative file first.** This ensures the parsing mode and page options are correct.
+
+### Based on Page Optimization Choice:
+
+#### If "Parse entire document"
 
 ```sql
--- Parse all pages with page_split for easier processing
+-- Test: Parse single file with page_split for easier processing
 SELECT AI_PARSE_DOCUMENT(
-  TO_FILE('@stage', 'document.pdf'),
+  TO_FILE('@db.schema.stage', '<test_file.pdf>'),
   {'mode': 'LAYOUT', 'page_split': true}
-) AS parsed;
+) AS parsed_result;
 ```
 
----
+#### If "Parse specific page range"
 
-### If "Parse specific page range"
-
-Ask for the range:
+First ask for the range:
 ```
 What page range would you like to parse?
 Example: 1-50 (parses pages 1 through 50)
@@ -134,19 +167,17 @@ Note: Page numbers are 1-indexed for your input, converted to 0-indexed internal
 ```
 
 ```sql
--- Parse specific range (page_filter uses 0-indexed pages)
+-- Test: Parse specific range (page_filter uses 0-indexed pages)
 -- For user input "1-50", use start: 0, end: 50
 SELECT AI_PARSE_DOCUMENT(
-  TO_FILE('@stage', 'document.pdf'),
+  TO_FILE('@db.schema.stage', '<test_file.pdf>'),
   {'mode': 'LAYOUT', 'page_filter': [{'start': 0, 'end': 50}]}
-) AS parsed;
+) AS parsed_result;
 ```
 
----
+#### If "Parse specific pages"
 
-### If "Parse specific pages"
-
-Ask for page numbers:
+First ask for page numbers:
 ```
 Which specific pages would you like to parse?
 Example: 1, 5, 10, 25 (parses only these pages)
@@ -154,17 +185,15 @@ Note: Page numbers are 1-indexed for your input, converted to 0-indexed internal
 ```
 
 ```sql
--- Parse specific pages (0-indexed internally)
+-- Test: Parse specific pages (0-indexed internally)
 -- For user input "1, 5, 10, 25", use [0, 4, 9, 24]
 SELECT AI_PARSE_DOCUMENT(
-  TO_FILE('@stage', 'document.pdf'),
+  TO_FILE('@db.schema.stage', '<test_file.pdf>'),
   {'mode': 'LAYOUT', 'page_filter': [0, 4, 9, 24]}
-) AS parsed;
+) AS parsed_result;
 ```
 
----
-
-### If "I'm not sure"
+#### If "I'm not sure"
 
 Provide guidance:
 ```
@@ -191,38 +220,20 @@ If user wants page count:
 ```sql
 -- Quick page count check (minimal processing)
 SELECT AI_PARSE_DOCUMENT(
-  TO_FILE('@stage', 'document.pdf'),
+  TO_FILE('@db.schema.stage', '<test_file.pdf>'),
   {'mode': 'OCR', 'page_filter': [{'start': 0, 'end': 1}]}
 ):pageCount AS total_pages;
 ```
 
 ---
 
-## Step 2: Execute Parsing
+## Step 4: Display Results to User (REQUIRED)
 
-### LAYOUT Mode (preserves structure)
+### ⚠️ MANDATORY: Show Parsed Content - Do NOT Skip
 
-```sql
-SELECT AI_PARSE_DOCUMENT(
-  TO_FILE('@db.schema.stage', 'document.pdf'),
-  {'mode': 'LAYOUT', 'page_split': true}
-) AS parsed_result;
-```
+**You MUST display the parsing results to the user before proceeding.**
 
-### OCR Mode (text extraction)
-
-```sql
-SELECT AI_PARSE_DOCUMENT(
-  TO_FILE('@db.schema.stage', 'document.pdf'),
-  {'mode': 'OCR'}
-) AS parsed_result;
-```
-
----
-
-## Step 3: Working with Results
-
-### Extract content from parsed result
+### Extract and display content:
 
 ```sql
 SELECT 
@@ -230,13 +241,13 @@ SELECT
   parsed_result:pageCount::INT AS total_pages
 FROM (
   SELECT AI_PARSE_DOCUMENT(
-    TO_FILE('@db.schema.stage', 'document.pdf'),
+    TO_FILE('@db.schema.stage', '<test_file.pdf>'),
     {'mode': 'LAYOUT'}
   ) AS parsed_result
 );
 ```
 
-### Extract individual pages (when page_split is true)
+### For page-split results, show individual pages:
 
 ```sql
 SELECT 
@@ -244,16 +255,66 @@ SELECT
   page.value:content::STRING AS page_content
 FROM (
   SELECT AI_PARSE_DOCUMENT(
-    TO_FILE('@db.schema.stage', 'document.pdf'),
+    TO_FILE('@db.schema.stage', '<test_file.pdf>'),
     {'mode': 'LAYOUT', 'page_split': true}
   ) AS parsed_result
 ),
 LATERAL FLATTEN(input => parsed_result:pages) page;
 ```
 
+### Present results to user:
+
+```
+Here are the parsing results for your test file:
+
+📄 File: [filename]
+📊 Total Pages: [X]
+📝 Mode: [LAYOUT/OCR]
+
+--- Parsed Content Preview ---
+[Show first 500-1000 characters of content]
+...
+
+Are you satisfied with these results?
+Options:
+1. Yes, proceed to next steps
+2. No, try different mode (switch LAYOUT ↔ OCR)
+3. No, adjust page selection
+```
+
+**If user is not satisfied:** Return to Step 1 or Step 3 based on their choice.
+
+**If user is satisfied:** Proceed to Step 5.
+
 ---
 
-## Step 4: Batch Processing
+## Step 5: Post-Processing Options (REQUIRED)
+
+### ⚠️ MANDATORY: Ask User What to Do Next - Do NOT Skip
+
+**You MUST ask the user what they want to do after successful parsing.**
+
+**Ask** user:
+```
+Your document has been parsed successfully! What would you like to do next?
+
+Options:
+1. Done - I only needed this one-time parsing
+2. Store results - Save parsed content to a Snowflake table
+3. Batch process - Parse multiple documents with same settings
+4. Set up pipeline - Create automated processing with streams and tasks
+5. Further analysis - Use parsed text for RAG, search, or AI analysis
+```
+
+**Based on user choice:**
+
+- **Done:** Parsing flow complete. No further action needed.
+- **Store results / Batch process / Set up pipeline:** → Load `reference/pipeline.md` for templates
+- **Further analysis:** → Discuss RAG pipeline setup, full-text search, or AI_COMPLETE analysis
+
+---
+
+## Reference: Batch Processing Templates
 
 ### Process multiple documents
 
@@ -372,16 +433,5 @@ FROM db.schema.parsed_documents;
 Arabic, Bengali, Burmese, Cebuano, Chinese, Czech, Dutch, English, French, German, Hebrew, Hindi, Indonesian, Italian, Japanese, Khmer, Korean, Lao, Malay, Persian, Polish, Portuguese, Russian, Spanish, Tagalog, Thai, Turkish, Urdu, Vietnamese
 
 ---
-
-## Next Steps: Post-Processing
-
-After parsing is complete, **ask the user** what they want to do next:
-
-→ **Load `reference/pipeline.md`** for post-processing options:
-- One-time parsing (done)
-- Store results in a Snowflake table
-- Set up a continuous processing pipeline with streams and tasks
-
-The pipeline sub-skill contains templates for parsing pipelines and page-level chunking patterns.
 
 For detailed AI_PARSE_DOCUMENT function options, see `reference/ai-parse-doc-and-ai-complete.md`.
